@@ -200,14 +200,13 @@ class Network(Env):
         """
         reward = 0
         for client in clients:
-            if client.base_station is not None:
-                slice: Slice = client.base_station.slices[client.subscribed_slice_index]
-                stats: Stats = client.stat_collector
-                latency_requirements = 1/slice.delay_tolerance
-                connection_requests = stats.connect_attempt[-1]
-                blocked_requests = connection_requests - slice.connected_users
-                reward_slice = -(latency_requirements)*(blocked_requests/connection_requests)
-                reward += reward_slice
+            if client.base_station is not None and client.get_slice() is not None:
+                reward = 2.0
+            elif client.base_station is not None:
+                reward = 1.0
+            else:
+                reward = 0.0
+
         return reward
             
         
