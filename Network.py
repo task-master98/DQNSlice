@@ -126,7 +126,7 @@ class Network(Env):
         self.initialise_stats()
         selected_clients = self.generate_user_requests()
         slice_hash_table = defaultdict(lambda: np.zeros(3))
-        reward = self.reward(selected_clients)
+
 
         total_connected_clients, clients_in_coverage = 0, 0
         for client in selected_clients:
@@ -139,10 +139,11 @@ class Network(Env):
                 else:
                     slice_hash_table[slice.name][0] = (slice_hash_table[slice.name][0] + 1)/len(selected_clients)
                     slice_hash_table[slice.name][1] = slice.capacity.capacity/client.base_station.capacity_bandwidth
-                    slice_hash_table[slice.name][2] += client.usage_freq
+                    slice_hash_table[slice.name][2] += client.usage_freq/slice.bandwidth_max
         state_array = []
         for _, item in slice_hash_table.items():
             state_array.append(item)
+        reward = self.Reward(selected_clients)
 
         self.state = (np.array(state_array)).flatten()
         done = bool(total_connected_clients == len(selected_clients)
@@ -189,7 +190,7 @@ class Network(Env):
 
       
     
-    def reward(self, clients: np.ndarray):
+    def Reward(self, clients: np.ndarray, alpha=0.5, beta=0.5):
         """
         The reward function is defined in the 
         base paper: https://ieeexplore.ieee.org/abstract/document/9235006/references#references
@@ -198,16 +199,28 @@ class Network(Env):
         slice. The net reward is the sum over all the slices. The request counts can be generated
         from the Stats.get_stats() method.
         """
-        reward = 0
+        client_reward, slice_reward = 0, 0
+        ## reward based on client satisfaction
         for client in clients:
-            if client.base_station is not None and client.get_slice() is not None:
-                reward = 2.0
-            elif client.base_station is not None:
-                reward = 1.0
+            if client.base_station is None:
+                client_reward -= 0.5
+                continue
             else:
-                reward = 0.0
+                client_reward += 1.0
 
-        return reward
+        ## reward for each slice
+        slice_count = 0
+        for bs in self.base_stations:
+            for slice in bs.slices:
+                slice_count += 1
+                slice_reward += slice.ratio*len(clients)*(slice.capacity.capacity/bs.capacity_bandwidth)
+
+        slice_reward = slice_reward/slice_count
+        total_reward = alpha*client_reward + beta*slice_reward
+        return total_reward
+
+
+
             
         
 
@@ -278,7 +291,7 @@ class Network(Env):
             location_y = get_dist(loc_y['distribution'])(*loc_y['params'])
             
             connected_slice_index = get_random_slice_index(cls.slice_weights)
-            c = Client(i, location_x, location_y, usage_freq_pattern.generate_scaled(),
+            c = Client(i, location_x, location_y, usage_freq_pattern.generate(),
                          connected_slice_index, None, None)
             clients.append(c)
             i += 1
