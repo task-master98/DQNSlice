@@ -21,6 +21,7 @@ class Client:
         self.last_usage = 0
         self.closest_base_stations = []
         self.connected = False
+        self.qos_class = None
 
         # Stats
         self.total_connected_time = 0
@@ -64,8 +65,16 @@ class Client:
     def get_slice(self):
         if self.base_station is None:
             return None
-        return self.base_station.slices[self.subscribed_slice_index]
-    
+        else:
+            self.qos_class = random.choice([1, 2, 5])
+            for itr, slice in enumerate(self.base_station.slices):
+                if(slice.qos_class == self.qos_class):
+                    self.subscribed_slice_index = itr
+                    return slice
+
+
+
+
     def generate_usage_and_connect(self):
         if self.usage_freq < random.random() and self.get_slice() is not None:
             # Generate a new usage

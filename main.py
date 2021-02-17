@@ -42,7 +42,7 @@ SLICE_PARAMS = {'emBB': {
 CLIENT_PARAMS = {'location':{'x': {'distribution': 'randint', 'params': (0, 1000)}, 'y': {'distribution': 'randint', 'params': (0, 1000)}}
                 , 'usage_frequency': {'distribution': 'randint', 'params': (0, 100000), 'divide_scale': 1000000}}
 NUM_CLIENTS = 1000
-EPISODES = 100
+EPISODES = 10
 
 # def log_all_info(file_name: str, *state_action):
 #     f = open(file_name, "a")
