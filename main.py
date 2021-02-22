@@ -6,7 +6,7 @@ from collections import defaultdict
 
 
 
-BS_PARAMS = [{'capacity_bandwidth': 20000000000, 'coverage': 500,
+BS_PARAMS = [{'capacity_bandwidth': 500000000, 'coverage': 500,
                 'ratios': {'emBB': 0.5, 'mMTC': 0.4, 'URLLC': 0.1},
                 'x': 500, 'y': 500}
                 ]
@@ -15,7 +15,7 @@ SLICE_PARAMS = {'emBB': {
                 'delay_tolerance': 10,
                 'qos_class': 5,
                 'bandwidth_guaranteed': 0,
-                'bandwidth_max': 100000000,
+                'bandwidth_max': 100000,
                 'client_weight': 0.45,
                 'threshold': 0,
                 'usage_pattern': {'distribution': 'randint', 'params': (4000000, 800000000)}
@@ -23,8 +23,8 @@ SLICE_PARAMS = {'emBB': {
                 'mMTC': {
                 'delay_tolerance': 10,
                 'qos_class': 2,
-                'bandwidth_guaranteed': 1000000,
-                'bandwidth_max': 100000000,
+                'bandwidth_guaranteed': 100000,
+                'bandwidth_max': 10000,
                 'client_weight': 0.3,
                 'threshold': 0,
                 'usage_pattern': {'distribution': 'randint', 'params': (800000, 8000000)}
@@ -32,8 +32,8 @@ SLICE_PARAMS = {'emBB': {
                 'URLLC': {
                 'delay_tolerance': 10,
                 'qos_class': 1,
-                'bandwidth_guaranteed': 5000000,
-                'bandwidth_max': 100000000,
+                'bandwidth_guaranteed': 500000,
+                'bandwidth_max': 15000,
                 'client_weight': 0.25,
                 'threshold': 0,
                 'usage_pattern': {'distribution': 'randint', 'params': (800, 8000000)}
@@ -44,11 +44,11 @@ CLIENT_PARAMS = {'location':{'x': {'distribution': 'randint', 'params': (0, 1000
 NUM_CLIENTS = 1000
 EPISODES = 1000
 
-# def log_all_info(file_name: str, *state_action):
-#     f = open(file_name, "a")
-#     msg = "State: {}, Action: {}, Reward: {}, Done: {}".format((*state_action))
-#     f.write(msg)
-#     f.close()
+def log_all_info(file_name: str, metrics: dict):
+    f = open(file_name, "a")
+    msg = metrics
+    f.write(msg)
+    f.close()
 
 def plot_func(episode_info: list):
     emBB = []
@@ -73,8 +73,22 @@ def plot_func(episode_info: list):
     ax_3.plot(URLLC)
     return fig
 
+def rolling_mean(rewards_per_episode: list, N=13):
+    rewards_per_episode = np.array(rewards_per_episode)
+    y = np.convolve(rewards_per_episode, np.ones(N)/N, 'same')
+    return y
 
-
+def generate_metrics(rewards_per_episode: list, time_taken_per_episode: list):
+    metrics = dict()
+    mean_reward = np.mean(np.array(rewards_per_episode))
+    reward_variance = np.var(np.array(rewards_per_episode))
+    mean_time = np.mean(np.array(time_taken_per_episode))
+    time_variance = np.var(np.array(time_taken_per_episode))
+    metrics['MEAN_REWARD'] = mean_reward
+    metrics['REWARD_VARIANCE'] = reward_variance
+    metrics['MEAN_TIME'] = mean_time
+    metrics['TIME_VAR'] = time_variance
+    return metrics
 
 if __name__ == "__main__":
     env = Network(bs_params=BS_PARAMS, slice_params=SLICE_PARAMS, client_params=CLIENT_PARAMS)
@@ -84,7 +98,7 @@ if __name__ == "__main__":
     action_size = env.action_space.n
     agent = DQNAgent(state_size, action_size)
     done = False
-    batch_size = 32
+    batch_size = 700
     episode_info = []
     for e in range(EPISODES):
         state = env.reset()
@@ -105,6 +119,7 @@ if __name__ == "__main__":
             reward_per_episode += reward
             state = next_state
             if done:
+                print("Done: True\n")
                 rewards_per_episode.append(reward_per_episode)      ## Average reward for one episode
                 time_taken_per_episode.append(time)
                 episode_info.append(info)
@@ -114,15 +129,23 @@ if __name__ == "__main__":
             if len(agent.memory) > batch_size:
                 agent.replay(batch_size)
 
+
+    metrics = generate_metrics(rewards_per_episode, time_taken_per_episode)
+    print(metrics)
+    # log_all_info('Info.txt', metrics)
     fig = plt.figure(1, figsize=(10, 10))
     ax1 = fig.add_subplot(211)
     ax2 = fig.add_subplot(212)
 
+
     ax1.title.set_text('Reward/Episode')
     ax2.title.set_text('Time Taken/Episode')
 
+
     ax1.plot(rewards_per_episode)
+    ax1.plot(rolling_mean(rewards_per_episode))
     ax2.plot(time_taken_per_episode)
+
 
     fig2 = plot_func(episode_info)
 

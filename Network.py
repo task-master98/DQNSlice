@@ -84,7 +84,7 @@ class Network(Env):
         low = -high
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
         self.steps_beyond_done = None
-        self.user_threshold = 0.7
+        self.user_threshold = 0.85
         self.seed()
         
     def seed(self, seed=None):
@@ -131,8 +131,10 @@ class Network(Env):
         total_connected_clients, clients_in_coverage = 0, 0
         for client in selected_clients:
             if client.base_station is not None:
+
                 total_connected_clients += 1
                 slice: Slice = client.get_slice()
+                client.usage_freq = client.distributor.generate_usage_according_to_qos(slice)
                 if slice is None:
                     allotted_slice: Slice = client.base_station.slices[client.subscribed_slice_index]
                     slice_hash_table[allotted_slice.name] = np.zeros(3)
@@ -146,8 +148,11 @@ class Network(Env):
         reward = self.Reward(selected_clients)
 
         self.state = (np.array(state_array)).flatten()
+        total_requested_bw = sum([client.usage_freq for client in selected_clients if client.base_station is not None])
+        total_availablw_bw = sum([bs.capacity_bandwidth for bs in self.base_stations])
         done = bool(total_connected_clients == len(selected_clients)
-                or total_connected_clients/len(selected_clients) >= self.user_threshold)     ## TODO: done condition is too harsh! Should add used bandwidth condition
+                    or total_connected_clients/len(selected_clients) >= self.user_threshold
+                    or total_requested_bw>0.7*total_availablw_bw)     ## TODO: done condition is too harsh! Should add used bandwidth condition
 
 
         # if self.steps_beyond_done is None:
@@ -190,7 +195,7 @@ class Network(Env):
 
       
     
-    def Reward(self, clients: np.ndarray, alpha=0.5, beta=0.5):
+    def Reward(self, clients: np.ndarray, alpha=0.7, beta=0.3):
         """
         The reward function is defined in the 
         base paper: https://ieeexplore.ieee.org/abstract/document/9235006/references#references
@@ -200,28 +205,24 @@ class Network(Env):
         from the Stats.get_stats() method.
         """
         client_reward, slice_reward = 0, 0
+        latency_requirements = {
+            'emBB': 0.21,
+            'mMTC': 0.37,
+            'URLLC': 0.42
+        }
         ## reward based on client satisfaction
         for client in clients:
-            if client.base_station is None:
-                client_reward -= 0.5
-                continue
-            else:
-                client_reward += 1.0
+            if client.base_station is not None and client.get_slice().is_available():
+                slice = client.get_slice()
+                if client.total_request_count != 0:
+                    client_reward += latency_requirements[slice.name]*client.stat_collector.block_count[-1]/client.total_request_count
 
-        ## reward for each slice
-        slice_count = 0
-        for bs in self.base_stations:
-            for slice in bs.slices:
-                slice_count += 1
-                slice_reward += slice.ratio*len(clients)*(slice.capacity.capacity/bs.capacity_bandwidth)
-
-        slice_reward = slice_reward/slice_count
-        total_reward = alpha*client_reward + beta*slice_reward
-        return total_reward
+        return client_reward
 
 
 
-            
+
+
         
 
     def is_done(self):
@@ -292,7 +293,7 @@ class Network(Env):
             
             connected_slice_index = get_random_slice_index(cls.slice_weights)
             c = Client(i, location_x, location_y, usage_freq_pattern.generate(),
-                         connected_slice_index, None, None)
+                         connected_slice_index, distributor=usage_freq_pattern,stat_collector=None, base_station=None)
             clients.append(c)
             i += 1
         return clients

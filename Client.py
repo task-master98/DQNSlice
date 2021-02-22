@@ -7,12 +7,13 @@ from utils import distance
 class Client:
     def __init__(self, id, x, y,
                  usage_freq,
-                 subscribed_slice_index, stat_collector,
+                 subscribed_slice_index, stat_collector, distributor,
                  base_station=None):
         self.id = id
         self.x = x
         self.y = y
-        
+
+        self.distributor = distributor
         self.usage_freq = usage_freq
         self.base_station = base_station
         self.stat_collector = stat_collector
